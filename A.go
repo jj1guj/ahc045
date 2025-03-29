@@ -143,6 +143,7 @@ func main() {
 		groups[g_id] = slice
 	}
 
+	// TODO: プリム法で各グループに対して最小全域木を求める
 	edges := [][][]int{}
 	for k := 0; k < M; k++ {
 		edges = append(edges, [][]int{})
