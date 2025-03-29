@@ -28,8 +28,8 @@ func query(c []int) [][2]int {
 	return result
 }
 
-func dist(a []int, b []int) int {
-	return int(math.Sqrt(float64((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]))))
+func distSquared(a []int, b []int) int {
+	return (a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1])
 }
 
 func answer(groups [][]int, edges [][][]int) {
@@ -73,7 +73,7 @@ func main() {
 		D[i] = make([]int, N)
 		for j := 0; j < N; j++ {
 			if i <= j {
-				D[i][j] = dist(C_coord[i], C_coord[j])
+				D[i][j] = distSquared(C_coord[i], C_coord[j])
 			} else {
 				D[i][j] = D[j][i]
 			}
