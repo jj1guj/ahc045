@@ -146,9 +146,14 @@ func main() {
 	edges := [][][]int{}
 	for k := 0; k < M; k++ {
 		edges = append(edges, [][]int{})
-		for i := 0; i < G[k]-1; i += 2 {
-			if i < G[k]-2 {
-				ret := query(groups[k][i : i+3])
+		for i := 0; i < G[k]-1; i += L - 1 {
+			if i+L <= G[k] {
+				ret := query(groups[k][i : i+L])
+				for j := 0; j < len(ret); j++ {
+					edges[k] = append(edges[k], ret[j][:])
+				}
+			} else if G[k]-i >= 2 {
+				ret := query(groups[k][i:G[k]])
 				for j := 0; j < len(ret); j++ {
 					edges[k] = append(edges[k], ret[j][:])
 				}
