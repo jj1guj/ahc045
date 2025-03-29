@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,10 @@ func query(c []int) [][2]int {
 		result = append(result, [2]int{a, b})
 	}
 	return result
+}
+
+func dist(a []int, b []int) int {
+	return int(math.Sqrt(float64((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]))))
 }
 
 func answer(groups [][]int, edges [][][]int) {
@@ -62,26 +67,64 @@ func main() {
 		C_coord[i] = []int{x, y}
 	}
 
-	C_ids := make([]int, N)
+	// 各都市間の距離を算出する
+	D := make([][]int, N)
 	for i := 0; i < N; i++ {
-		C_ids[i] = i
+		D[i] = make([]int, N)
+		for j := 0; j < N; j++ {
+			if i <= j {
+				D[i][j] = dist(C_coord[i], C_coord[j])
+			} else {
+				D[i][j] = D[j][i]
+			}
+		}
 	}
 
-	// 仮の座標準に都市をソート
-	sort.Slice(C_ids, func(i, j int) bool {
-		if C_coord[C_ids[i]][0] != C_coord[C_ids[j]][0] {
-			return C_coord[C_ids[i]][0] < C_coord[C_ids[j]][0]
+	// 各都市について距離が近い順にソートする
+	D_ids := make([][]int, N)
+	for i := 0; i < N; i++ {
+		ids := make([]int, N-1)
+		idx := 0
+		for j := 0; j < N; j++ {
+			if i != j {
+				ids[idx] = j
+				idx++
+			}
 		}
-		return C_coord[C_ids[i]][1] < C_coord[C_ids[j]][1]
-	})
 
-	// ソートした順に都市を分割
+		sort.Slice(ids, func(a, b int) bool {
+			return D[i][ids[a]] < D[i][ids[b]]
+		})
+		D_ids[i] = ids
+	}
+
+	// 入力順に都市を選び、その都市から近い順に別の都市を選びグループに分ける
+	C_selected := make([]bool, N)
+	for i := range C_selected {
+		C_selected[i] = false
+	}
 	groups := [][]int{}
-	start_idx := 0
 	for _, g := range G {
-		slice := C_ids[start_idx : start_idx+g]
+		slice := make([]int, g)
+		for i := 0; i < N; i++ {
+			if !C_selected[i] {
+				slice[0] = i
+				C_selected[i] = true
+				idx := 1
+				for _, id := range D_ids[i] {
+					if idx == g {
+						break
+					}
+					if !C_selected[id] {
+						slice[idx] = id
+						C_selected[id] = true
+						idx++
+					}
+				}
+				break
+			}
+		}
 		groups = append(groups, slice)
-		start_idx += g
 	}
 
 	edges := [][][]int{}
