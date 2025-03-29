@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,13 +18,17 @@ func toBlankJoin(arr []int) string {
 	return strings.Join(strArr, " ")
 }
 
-func query(c []int) [][2]int {
-	fmt.Println("?", len(c), toBlankJoin(c))
-	result := make([][2]int, 0, len(c)-1)
+func query(c []int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
+	writer.WriteString(fmt.Sprintf("? %d %s\n", len(c), toBlankJoin(c)))
+	writer.Flush()
 
+	result := make([][2]int, 0, len(c)-1)
 	for i := 0; i < len(c)-1; i++ {
-		var a, b int
-		fmt.Scan(&a, &b) // 2つの整数を入力
+		scanner.Scan()
+		line := scanner.Text()
+		parts := strings.Split(line, " ")
+		a, _ := strconv.Atoi(parts[0])
+		b, _ := strconv.Atoi(parts[1])
 		result = append(result, [2]int{a, b})
 	}
 	return result
@@ -32,32 +38,49 @@ func distSquared(a []int, b []int) int {
 	return (a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1])
 }
 
-func answer(groups [][]int, edges [][][]int) {
-	fmt.Println("!")
+func answer(groups [][]int, edges [][][]int, writer *bufio.Writer) {
+	writer.WriteString("!\n")
 	for i := 0; i < len(groups); i++ {
-		fmt.Println(toBlankJoin(groups[i]))
+		writer.WriteString(toBlankJoin(groups[i]) + "\n")
 		for _, e := range edges[i] {
-			fmt.Println(toBlankJoin(e))
+			writer.WriteString(toBlankJoin(e) + "\n")
 		}
 	}
+	writer.Flush()
 }
 
 func main() {
-	var N, M, Q, L, W int
-	fmt.Scan(&N, &M, &Q, &L, &W)
+	scanner := bufio.NewScanner(os.Stdin)
+	writer := bufio.NewWriter(os.Stdout)
+
+	scanner.Scan()
+	line := scanner.Text()
+	parts := strings.Split(line, " ")
+	N, _ := strconv.Atoi(parts[0])
+	M, _ := strconv.Atoi(parts[1])
+	_, _ = strconv.Atoi(parts[2]) // Qは使わない
+	L, _ := strconv.Atoi(parts[3])
+	_, _ = strconv.Atoi(parts[4]) // Wは使わない
+
 	G := make([]int, M)
 	C := make([][]int, N)
 	C_coord := make([][]int, N)
+
+	scanner.Scan()
+	line = scanner.Text()
+	parts = strings.Split(line, " ")
 	for i := 0; i < M; i++ {
-		fmt.Scan(&G[i])
+		G[i], _ = strconv.Atoi(parts[i])
 	}
 
 	for i := 0; i < N; i++ {
-		l := make([]int, 4)
+		C[i] = make([]int, 4)
+		scanner.Scan()
+		line = scanner.Text()
+		parts = strings.Split(line, " ")
 		for j := 0; j < 4; j++ {
-			fmt.Scan(&l[j])
+			C[i][j], _ = strconv.Atoi(parts[j])
 		}
-		C[i] = l
 	}
 
 	// 各都市の仮の座標を算出する
@@ -148,12 +171,12 @@ func main() {
 		edges = append(edges, [][]int{})
 		for i := 0; i < G[k]-1; i += L - 1 {
 			if i+L <= G[k] {
-				ret := query(groups[k][i : i+L])
+				ret := query(groups[k][i:i+L], writer, scanner)
 				for j := 0; j < len(ret); j++ {
 					edges[k] = append(edges[k], ret[j][:])
 				}
 			} else if G[k]-i >= 2 {
-				ret := query(groups[k][i:G[k]])
+				ret := query(groups[k][i:G[k]], writer, scanner)
 				for j := 0; j < len(ret); j++ {
 					edges[k] = append(edges[k], ret[j][:])
 				}
@@ -162,5 +185,5 @@ func main() {
 			}
 		}
 	}
-	answer(groups, edges)
+	answer(groups, edges, writer)
 }
