@@ -98,7 +98,7 @@ func main() {
 		D_ids[i] = ids
 	}
 
-	// 入力順に都市を選び、その都市から近い順に別の都市を選びグループに分ける
+	// 入力順に都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
 	C_selected := make([]bool, N)
 	for i := range C_selected {
 		C_selected[i] = false
@@ -110,16 +110,21 @@ func main() {
 			if !C_selected[i] {
 				slice[0] = i
 				C_selected[i] = true
-				idx := 1
-				for _, id := range D_ids[i] {
-					if idx == g {
-						break
+				for idx := 1; idx < g; idx++ {
+					d_min := math.MaxInt
+					city_id := -1
+					for j := 0; j < idx; j++ {
+						for _, id := range D_ids[slice[j]] {
+							if !C_selected[id] {
+								if D[slice[j]][id] < d_min {
+									d_min = D[slice[j]][id]
+									city_id = id
+								}
+							}
+						}
 					}
-					if !C_selected[id] {
-						slice[idx] = id
-						C_selected[id] = true
-						idx++
-					}
+					slice[idx] = city_id
+					C_selected[city_id] = true
 				}
 				break
 			}
