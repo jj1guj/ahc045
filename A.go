@@ -98,13 +98,24 @@ func main() {
 		D_ids[i] = ids
 	}
 
+	// グループ内の都市数が多い順にソートする
+	G_ids := make([]int, M)
+	for i := 0; i < M; i++ {
+		G_ids[i] = i
+	}
+	sort.Slice(G_ids, func(a, b int) bool {
+		return G[G_ids[a]] > G[G_ids[b]]
+	})
+
 	// 入力順に都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
 	C_selected := make([]bool, N)
 	for i := range C_selected {
 		C_selected[i] = false
 	}
-	groups := [][]int{}
-	for _, g := range G {
+	groups := make([][]int, M)
+
+	for _, g_id := range G_ids {
+		g := G[g_id]
 		slice := make([]int, g)
 		for i := 0; i < N; i++ {
 			if !C_selected[i] {
@@ -129,7 +140,7 @@ func main() {
 				break
 			}
 		}
-		groups = append(groups, slice)
+		groups[g_id] = slice
 	}
 
 	edges := [][][]int{}
