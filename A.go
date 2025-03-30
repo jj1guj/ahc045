@@ -151,7 +151,7 @@ func main() {
 		return G[G_ids[a]] > G[G_ids[b]]
 	})
 
-	// 入力順に¥都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
+	// 都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
 	C_selected := make([]bool, N)
 	for i := range C_selected {
 		C_selected[i] = false
