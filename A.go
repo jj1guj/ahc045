@@ -130,7 +130,7 @@ func main() {
 		return G[G_ids[a]] > G[G_ids[b]]
 	})
 
-	// 入力順に都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
+	// 入力順に¥都市を選び、直前までに選ばれた各都市から最も近い都市を選ぶ
 	C_selected := make([]bool, N)
 	for i := range C_selected {
 		C_selected[i] = false
@@ -140,28 +140,47 @@ func main() {
 	for _, g_id := range G_ids {
 		g := G[g_id]
 		slice := make([]int, g)
+		// 最初の都市を選ぶ
+		// 最初の都市は現状選べる最も近い都市との距離が最小である都市を選ぶ
+		first_city_id := -1
+		first_d_min := math.MaxInt
+		ref := -1
 		for i := 0; i < N; i++ {
 			if !C_selected[i] {
-				slice[0] = i
-				C_selected[i] = true
-				for idx := 1; idx < g; idx++ {
-					d_min := math.MaxInt
-					city_id := -1
-					for j := 0; j < idx; j++ {
-						for _, id := range D_ids[slice[j]] {
-							if !C_selected[id] {
-								if D[slice[j]][id] < d_min {
-									d_min = D[slice[j]][id]
-									city_id = id
-								}
-							}
+				if ref == -1 {
+					ref = i
+				}
+				for _, id := range D_ids[i] {
+					if !C_selected[id] {
+						if D[i][id] < first_d_min {
+							first_d_min = D[i][id]
+							first_city_id = i
+							break
 						}
 					}
-					slice[idx] = city_id
-					C_selected[city_id] = true
 				}
-				break
 			}
+		}
+		if first_city_id == -1 {
+			first_city_id = ref
+		}
+		slice[0] = first_city_id
+		C_selected[first_city_id] = true
+		for idx := 1; idx < g; idx++ {
+			d_min := math.MaxInt
+			city_id := -1
+			for j := 0; j < idx; j++ {
+				for _, id := range D_ids[slice[j]] {
+					if !C_selected[id] {
+						if D[slice[j]][id] < d_min {
+							d_min = D[slice[j]][id]
+							city_id = id
+						}
+					}
+				}
+			}
+			slice[idx] = city_id
+			C_selected[city_id] = true
 		}
 		groups[g_id] = slice
 	}
