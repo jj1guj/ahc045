@@ -90,13 +90,34 @@ func main() {
 		C_coord[i] = []int{x, y}
 	}
 
-	// 各都市間の距離を算出する
+	// 各都市間のあり得る最大の距離を算出する
+	// TODO: 総当たりの4パターンを計算しているが高速化の余地あり
 	D := make([][]int, N)
 	for i := 0; i < N; i++ {
 		D[i] = make([]int, N)
 		for j := 0; j < N; j++ {
-			if i <= j {
-				D[i][j] = distSquared(C_coord[i], C_coord[j])
+			if i == j {
+				D[i][j] = 0
+			} else if i < j {
+				coord_i := [][]int{
+					{C[i][0], C[i][2]},
+					{C[i][0], C[i][3]},
+					{C[i][1], C[i][2]},
+					{C[i][1], C[i][3]},
+				}
+				coord_j := [][]int{
+					{C[j][0], C[j][2]},
+					{C[j][0], C[j][3]},
+					{C[j][1], C[j][2]},
+					{C[j][1], C[j][3]},
+				}
+				d_max := 0
+				for ci := range coord_i {
+					for cj := range coord_j {
+						d_max = max(d_max, distSquared(coord_i[ci], coord_j[cj]))
+					}
+				}
+				D[i][j] = d_max
 			} else {
 				D[i][j] = D[j][i]
 			}
