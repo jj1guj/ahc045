@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"container/heap"
 	"fmt"
 	"math"
 	"os"
@@ -10,20 +11,124 @@ import (
 	"strings"
 )
 
-func toBlankJoin(arr []int) string {
-	strArr := make([]string, len(arr))
-	for i, v := range arr {
+type Edge struct {
+	from   int
+	to     int
+	weight int
+}
+
+type EdgeHeap []Edge
+
+func (h EdgeHeap) Len() int           { return len(h) }
+func (h EdgeHeap) Less(i, j int) bool { return h[i].weight < h[j].weight }
+func (h EdgeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *EdgeHeap) Push(x interface{}) {
+	*h = append(*h, x.(Edge))
+}
+
+func (h *EdgeHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// プリム法による最小全域木の構築
+func Prim(nodes *[]int, D *[][]int) [][]int {
+	// 隣接リストを構築
+	adj := make([][]Edge, len(*nodes))
+	for i := 0; i < len(*nodes); i++ {
+		for j := 0; j < len(*nodes); j++ {
+			if i != j {
+				adj[i] = append(adj[i], Edge{from: i, to: j, weight: (*D)[i][j]})
+			}
+		}
+	}
+
+	marked := make([]bool, len(*nodes))
+	for i := 0; i < len(*nodes); i++ {
+		marked[i] = false
+	}
+	marked_cnt := 0
+	heapq := &EdgeHeap{}
+	heap.Init(heapq)
+	marked[0] = true
+	marked_cnt++
+	for _, e := range adj[0] {
+		heap.Push(heapq, e)
+	}
+
+	out_adj := make([][]int, len(*nodes))
+	for marked_cnt < len(*nodes) {
+		e := heap.Pop(heapq).(Edge)
+		if marked[e.to] {
+			continue
+		}
+		marked[e.to] = true
+		marked_cnt++
+		out_adj[e.from] = append(out_adj[e.from], e.to)
+		for _, e2 := range adj[e.to] {
+			if !marked[e2.to] {
+				heap.Push(heapq, e2)
+			}
+		}
+	}
+	return out_adj
+}
+
+// トポロジカルソート
+func TopologicalSort(adj *[][]int, g *[]int) []int {
+	sorted_g := make([]int, 0)
+	indegrees := make([]int, len(*g))
+	fmt.Fprintln(os.Stderr, indegrees)
+	for i := 0; i < len(*g); i++ {
+		for j := range (*adj)[i] {
+			indegrees[j]++
+		}
+	}
+	fmt.Fprintln(os.Stderr, adj, indegrees)
+
+	queue := make([]int, 0)
+	for i := 0; i < len(*g); i++ {
+		if indegrees[i] == 0 {
+			queue = append(queue, i)
+		}
+	}
+
+	cnt := 0
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		sorted_g = append(sorted_g, (*g)[node])
+		cnt++
+
+		for _, neighbor := range (*adj)[node] {
+			indegrees[neighbor]--
+			if indegrees[neighbor] == 0 {
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+	// fmt.Fprintln(os.Stderr, "indegrees", indegrees, cnt)
+	return sorted_g
+}
+
+func toBlankJoin(arr *[]int) string {
+	strArr := make([]string, len(*arr))
+	for i, v := range *arr {
 		strArr[i] = strconv.Itoa(v)
 	}
 	return strings.Join(strArr, " ")
 }
 
-func query(c []int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
-	writer.WriteString(fmt.Sprintf("? %d %s\n", len(c), toBlankJoin(c)))
+func query(c *[]int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
+	writer.WriteString(fmt.Sprintf("? %d %s\n", len(*c), toBlankJoin(c)))
 	writer.Flush()
 
-	result := make([][2]int, 0, len(c)-1)
-	for i := 0; i < len(c)-1; i++ {
+	result := make([][2]int, 0, len(*c)-1)
+	for i := 0; i < len(*c)-1; i++ {
 		scanner.Scan()
 		line := scanner.Text()
 		parts := strings.Split(line, " ")
@@ -34,16 +139,16 @@ func query(c []int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
 	return result
 }
 
-func distSquared(a []int, b []int) int {
-	return (a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1])
+func distSquared(a *[]int, b *[]int) int {
+	return ((*a)[0]-(*b)[0])*((*a)[0]-(*b)[0]) + ((*a)[1]-(*b)[1])*((*a)[1]-(*b)[1])
 }
 
-func answer(groups [][]int, edges [][][]int, writer *bufio.Writer) {
+func answer(groups *[][]int, edges *[][][]int, writer *bufio.Writer) {
 	writer.WriteString("!\n")
-	for i := 0; i < len(groups); i++ {
-		writer.WriteString(toBlankJoin(groups[i]) + "\n")
-		for _, e := range edges[i] {
-			writer.WriteString(toBlankJoin(e) + "\n")
+	for i := 0; i < len(*groups); i++ {
+		writer.WriteString(toBlankJoin(&(*groups)[i]) + "\n")
+		for _, e := range (*edges)[i] {
+			writer.WriteString(toBlankJoin(&e) + "\n")
 		}
 	}
 	writer.Flush()
@@ -114,7 +219,7 @@ func main() {
 				d_max := 0
 				for ci := range coord_i {
 					for cj := range coord_j {
-						d_max = max(d_max, distSquared(coord_i[ci], coord_j[cj]))
+						d_max = max(d_max, distSquared(&coord_i[ci], &coord_j[cj]))
 					}
 				}
 				D[i][j] = d_max
@@ -206,17 +311,27 @@ func main() {
 		groups[g_id] = slice
 	}
 
+	// 最小全域木を構築し、トポロジカルソートを行う
+	for i := 0; i < M; i++ {
+		adj := Prim(&groups[i], &D)
+		sorted_g := TopologicalSort(&adj, &groups[i])
+		// fmt.Fprintln(os.Stderr, "sorted group", i, groups[i], sorted_g, len(sorted_g), len(groups[i]))
+		groups[i] = sorted_g
+	}
+
 	edges := [][][]int{}
 	for k := 0; k < M; k++ {
 		edges = append(edges, [][]int{})
 		for i := 0; i < G[k]-1; i += L - 1 {
 			if i+L <= G[k] {
-				ret := query(groups[k][i:i+L], writer, scanner)
+				subSlice := groups[k][i : i+L]
+				ret := query(&subSlice, writer, scanner)
 				for j := 0; j < len(ret); j++ {
 					edges[k] = append(edges[k], ret[j][:])
 				}
 			} else if G[k]-i >= 2 {
-				ret := query(groups[k][i:G[k]], writer, scanner)
+				subSlice := groups[k][i:G[k]]
+				ret := query(&subSlice, writer, scanner)
 				for j := 0; j < len(ret); j++ {
 					edges[k] = append(edges[k], ret[j][:])
 				}
@@ -225,5 +340,5 @@ func main() {
 			}
 		}
 	}
-	answer(groups, edges, writer)
+	answer(&groups, &edges, writer)
 }
