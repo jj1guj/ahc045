@@ -69,6 +69,7 @@ func Prim(nodes *[]int, D *[][]int) [][]int {
 		marked[e.to] = true
 		marked_cnt++
 		out_adj[e.from] = append(out_adj[e.from], e.to)
+		out_adj[e.to] = append(out_adj[e.to], e.from)
 		for _, e2 := range adj[e.to] {
 			if !marked[e2.to] {
 				heap.Push(heapq, e2)
@@ -106,6 +107,42 @@ func TopologicalSort(adj *[][]int, g *[]int) []int {
 			indegrees[neighbor]--
 			if indegrees[neighbor] == 0 {
 				queue = append(queue, neighbor)
+			}
+		}
+	}
+	return sorted_g
+}
+
+func dfs(adj *[][]int, g *[]int) []int {
+	sorted_g := make([]int, 0)
+	sorted_g_index := make([]int, 0)
+
+	visited := make([]bool, len(*g))
+	for i := 0; i < len(*g); i++ {
+		visited[i] = false
+	}
+
+	stack := make([]int, 0)
+	for i := 0; i < len(*g); i++ {
+		if len((*adj)[i]) <= 1 {
+			stack = append(stack, i)
+			break
+		}
+	}
+
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if visited[node] {
+			continue
+		}
+		visited[node] = true
+		sorted_g = append(sorted_g, (*g)[node])
+		sorted_g_index = append(sorted_g_index, node)
+
+		for _, neighbor := range (*adj)[node] {
+			if !visited[neighbor] {
+				stack = append(stack, neighbor)
 			}
 		}
 	}
@@ -201,25 +238,26 @@ func main() {
 			if i == j {
 				D[i][j] = 0
 			} else if i < j {
-				coord_i := [][]int{
-					{C[i][0], C[i][2]},
-					{C[i][0], C[i][3]},
-					{C[i][1], C[i][2]},
-					{C[i][1], C[i][3]},
-				}
-				coord_j := [][]int{
-					{C[j][0], C[j][2]},
-					{C[j][0], C[j][3]},
-					{C[j][1], C[j][2]},
-					{C[j][1], C[j][3]},
-				}
-				d_max := 0
-				for ci := range coord_i {
-					for cj := range coord_j {
-						d_max = max(d_max, distSquared(&coord_i[ci], &coord_j[cj]))
-					}
-				}
-				D[i][j] = d_max
+				// coord_i := [][]int{
+				// 	{C[i][0], C[i][2]},
+				// 	{C[i][0], C[i][3]},
+				// 	{C[i][1], C[i][2]},
+				// 	{C[i][1], C[i][3]},
+				// }
+				// coord_j := [][]int{
+				// 	{C[j][0], C[j][2]},
+				// 	{C[j][0], C[j][3]},
+				// 	{C[j][1], C[j][2]},
+				// 	{C[j][1], C[j][3]},
+				// }
+				// d_max := 0
+				// for ci := range coord_i {
+				// 	for cj := range coord_j {
+				// 		d_max = max(d_max, distSquared(&coord_i[ci], &coord_j[cj]))
+				// 	}
+				// }
+				// D[i][j] = d_max
+				D[i][j] = distSquared(&C_coord[i], &C_coord[j])
 			} else {
 				D[i][j] = D[j][i]
 			}
@@ -311,7 +349,7 @@ func main() {
 	// 最小全域木を構築し、トポロジカルソートを行う
 	for i := 0; i < M; i++ {
 		adj := Prim(&groups[i], &D)
-		sorted_g := TopologicalSort(&adj, &groups[i])
+		sorted_g := dfs(&adj, &groups[i])
 		groups[i] = sorted_g
 	}
 
