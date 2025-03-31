@@ -82,13 +82,11 @@ func Prim(nodes *[]int, D *[][]int) [][]int {
 func TopologicalSort(adj *[][]int, g *[]int) []int {
 	sorted_g := make([]int, 0)
 	indegrees := make([]int, len(*g))
-	fmt.Fprintln(os.Stderr, indegrees)
 	for i := 0; i < len(*g); i++ {
-		for j := range (*adj)[i] {
+		for _, j := range (*adj)[i] {
 			indegrees[j]++
 		}
 	}
-	fmt.Fprintln(os.Stderr, adj, indegrees)
 
 	queue := make([]int, 0)
 	for i := 0; i < len(*g); i++ {
@@ -111,7 +109,6 @@ func TopologicalSort(adj *[][]int, g *[]int) []int {
 			}
 		}
 	}
-	// fmt.Fprintln(os.Stderr, "indegrees", indegrees, cnt)
 	return sorted_g
 }
 
@@ -315,7 +312,6 @@ func main() {
 	for i := 0; i < M; i++ {
 		adj := Prim(&groups[i], &D)
 		sorted_g := TopologicalSort(&adj, &groups[i])
-		// fmt.Fprintln(os.Stderr, "sorted group", i, groups[i], sorted_g, len(sorted_g), len(groups[i]))
 		groups[i] = sorted_g
 	}
 
