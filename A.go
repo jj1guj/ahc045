@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"container/heap"
 	"fmt"
 	"math"
 	"math/rand"
@@ -12,6 +13,10 @@ import (
 	"time"
 )
 
+var writer *bufio.Writer
+var scanner *bufio.Scanner
+var start_time time.Time
+
 func toBlankJoin(arr *[]int) string {
 	strArr := make([]string, len(*arr))
 	for i, v := range *arr {
@@ -20,7 +25,18 @@ func toBlankJoin(arr *[]int) string {
 	return strings.Join(strArr, " ")
 }
 
-func query(c *[]int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
+func answer(groups *[][]int, edges *[][][]int) {
+	writer.WriteString("!\n")
+	for i := 0; i < len(*groups); i++ {
+		writer.WriteString(toBlankJoin(&(*groups)[i]) + "\n")
+		for _, e := range (*edges)[i] {
+			writer.WriteString(toBlankJoin(&e) + "\n")
+		}
+	}
+	writer.Flush()
+}
+
+func query(c *[]int) [][2]int {
 	writer.WriteString(fmt.Sprintf("? %d %s\n", len(*c), toBlankJoin(c)))
 	writer.Flush()
 
@@ -36,83 +52,208 @@ func query(c *[]int, writer *bufio.Writer, scanner *bufio.Scanner) [][2]int {
 	return result
 }
 
-func distSquared(a *[]int, b *[]int) int {
-	return ((*a)[0]-(*b)[0])*((*a)[0]-(*b)[0]) + ((*a)[1]-(*b)[1])*((*a)[1]-(*b)[1])
+func distSquared(a *[]float32, b *[]float32) float32 {
+	return float32(math.Sqrt(float64(((*a)[0]-(*b)[0])*((*a)[0]-(*b)[0]) + ((*a)[1]-(*b)[1])*((*a)[1]-(*b)[1]))))
 }
 
-func sort_group(group *[]int, D *[][]int, d_sum *int) []int {
-	g := len(*group)
-	ret_group := make([]int, g)
-	first_city_id := -1
-	second_city_id := -1
-	d_min := math.MaxInt
-	marked := map[int]bool{}
-	for _, i := range *group {
-		marked[i] = false
-		for _, j := range *group {
-			if i != j {
-				if (*D)[i][j] < d_min {
-					d_min = (*D)[i][j]
-					first_city_id = i
-					second_city_id = j
-				}
-			}
+func project_coords(coords *[][]float32, bounds *[][]int) {
+	for i := 0; i < len(*coords); i++ {
+		x := (*coords)[i][0]
+		y := (*coords)[i][1]
+		if x < float32((*bounds)[i][0]) {
+			x = float32((*bounds)[i][0])
+		} else if x > float32((*bounds)[i][1]) {
+			x = float32((*bounds)[i][1])
 		}
+		if y < float32((*bounds)[i][2]) {
+			y = float32((*bounds)[i][2])
+		} else if y > float32((*bounds)[i][3]) {
+			y = float32((*bounds)[i][3])
+		}
+		(*coords)[i][0] = x
+		(*coords)[i][1] = y
 	}
+}
 
-	ret_group[0] = first_city_id
-	ret_group[1] = second_city_id
-	(*d_sum) += d_min
-	marked[first_city_id] = true
-	marked[second_city_id] = true
-	for i := 2; i < g; i++ {
-		d_min = math.MaxInt
-		city_id := -1
-		for j := 0; j < i; j++ {
-			for _, id := range *group {
-				if !marked[id] {
-					if (*D)[ret_group[j]][id] < d_min {
-						d_min = (*D)[ret_group[j]][id]
-						city_id = id
+func compute_gradients(coords *[][]float32, queries *[][]int, query_edges *[][][]int, anchor_set *map[int]struct{}, margin float32, anchor_weight float32, grads *[][]float32) {
+	for q_idx, q := range *queries {
+		edges := (*query_edges)[q_idx]
+		for _, e := range edges {
+			i := e[0]
+			j := e[1]
+			d_ij := distSquared(&(*coords)[i], &(*coords)[j])
+			for _, k := range q {
+				if k == i || k == j {
+					continue
+				}
+				d_ik := distSquared(&(*coords)[i], &(*coords)[k])
+				gap := d_ij + margin - d_ik
+				if gap > 0 {
+					_, ok_i := (*anchor_set)[i]
+					_, ok_j := (*anchor_set)[j]
+					ok := ok_i || ok_j
+					var weight float32
+					grad_ij := make([]float32, 2)
+					grad_ik := make([]float32, 2)
+					if ok {
+						weight = anchor_weight
+					} else {
+						weight = 1.0
 					}
+
+					if d_ij > 1e-6 {
+						grad_ij[0] = ((*coords)[i][0] - (*coords)[j][0]) / d_ij
+						grad_ij[1] = ((*coords)[i][1] - (*coords)[j][1]) / d_ij
+					} else {
+						grad_ij[0] = 0.0
+						grad_ij[1] = 0.0
+					}
+
+					if d_ik > 1e-6 {
+						grad_ik[0] = ((*coords)[i][0] - (*coords)[k][0]) / d_ik
+						grad_ik[1] = ((*coords)[i][1] - (*coords)[k][1]) / d_ik
+					} else {
+						grad_ik[0] = 0.0
+						grad_ik[1] = 0.0
+					}
+
+					(*grads)[i][0] += weight * (grad_ij[0] - grad_ik[0])
+					(*grads)[i][1] += weight * (grad_ij[1] - grad_ik[1])
+					(*grads)[j][0] -= weight * grad_ij[0]
+					(*grads)[j][1] -= weight * grad_ij[1]
+					(*grads)[k][0] -= weight * grad_ik[0]
+					(*grads)[k][1] -= weight * grad_ik[1]
 				}
 			}
 		}
-		ret_group[i] = city_id
-		marked[city_id] = true
-		(*d_sum) += d_min
 	}
-	return ret_group
 }
 
-func answer(groups *[][]int, edges *[][][]int, writer *bufio.Writer) {
-	writer.WriteString("!\n")
-	for i := 0; i < len(*groups); i++ {
-		writer.WriteString(toBlankJoin(&(*groups)[i]) + "\n")
-		for _, e := range (*edges)[i] {
-			writer.WriteString(toBlankJoin(&e) + "\n")
+func optimize_coords(coords *[][]float32, bounds *[][]int, queries *[][]int, query_edges *[][][]int, anchor_set *map[int]struct{}, lr float32, margin float32, anchor_weight float32, grads *[][]float32) {
+	for time.Since(start_time) < 1000 * time.Millisecond {
+		for i := 0; i < len(*grads); i++ {
+			(*grads)[i][0] = 0.0
+			(*grads)[i][1] = 0.0
+		}
+		compute_gradients(coords, queries, query_edges, anchor_set, margin, anchor_weight, grads)
+		for i := 0; i < len(*coords); i++ {
+			(*coords)[i][0] -= lr * (*grads)[i][0]
+			(*coords)[i][1] -= lr * (*grads)[i][1]
+		}
+		project_coords(coords, bounds)
+	}
+}
+
+func getRandomAnchor(anchor_set map[int]struct{}) int {
+	anchor_ids := make([]int, 0, len(anchor_set))
+	for id := range anchor_set {
+		anchor_ids = append(anchor_ids, id)
+	}
+	return anchor_ids[rand.Intn(len(anchor_ids))]
+}
+
+func randomSample(slice []int, count int) []int {
+	if count > len(slice) {
+		panic("count is greater than the length of the slice")
+	}
+
+	// スライスをシャッフル
+	rand.Seed(time.Now().UnixNano()) // シードを設定
+	shuffled := make([]int, len(slice))
+	copy(shuffled, slice)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	// 指定された数の要素を選択
+	return shuffled[:count]
+}
+
+type Edge struct {
+	from   int
+	to     int
+	weight float32
+}
+
+type EdgeHeap []Edge
+
+func (h EdgeHeap) Len() int           { return len(h) }
+func (h EdgeHeap) Less(i, j int) bool { return h[i].weight < h[j].weight }
+func (h EdgeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *EdgeHeap) Push(x interface{}) {
+	*h = append(*h, x.(Edge))
+}
+
+func (h *EdgeHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// プリム法による最小全域木の構築
+func Prim(nodes *[]int, D *[][]float32) [][]int {
+	// 隣接リストを構築
+	adj := make([][]Edge, len(*nodes))
+	for i := 0; i < len(*nodes); i++ {
+		for j := 0; j < len(*nodes); j++ {
+			if i != j {
+				adj[i] = append(adj[i], Edge{from: i, to: j, weight: (*D)[(*nodes)[i]][(*nodes)[j]]})
+			}
 		}
 	}
-	writer.Flush()
+
+	marked := make([]bool, len(*nodes))
+	for i := 0; i < len(*nodes); i++ {
+		marked[i] = false
+	}
+	marked_cnt := 0
+	heapq := &EdgeHeap{}
+	heap.Init(heapq)
+	marked[0] = true
+	marked_cnt++
+	for _, e := range adj[0] {
+		heap.Push(heapq, e)
+	}
+
+	out_edge := make([][]int, 0)
+	for marked_cnt < len(*nodes) {
+		e := heap.Pop(heapq).(Edge)
+		if marked[e.to] {
+			continue
+		}
+		marked[e.to] = true
+		marked_cnt++
+		edge := []int{(*nodes)[e.from], (*nodes)[e.to]}
+		out_edge = append(out_edge, edge)
+		for _, e2 := range adj[e.to] {
+			if !marked[e2.to] {
+				heap.Push(heapq, e2)
+			}
+		}
+	}
+	return out_edge
 }
 
 func main() {
-	start := time.Now()
-	scanner := bufio.NewScanner(os.Stdin)
-	writer := bufio.NewWriter(os.Stdout)
+	start_time = time.Now()
+	scanner = bufio.NewScanner(os.Stdin)
+	writer = bufio.NewWriter(os.Stdout)
 
 	scanner.Scan()
 	line := scanner.Text()
 	parts := strings.Split(line, " ")
 	N, _ := strconv.Atoi(parts[0])
 	M, _ := strconv.Atoi(parts[1])
-	_, _ = strconv.Atoi(parts[2]) // Qは使わない
+	Q, _ := strconv.Atoi(parts[2])
 	L, _ := strconv.Atoi(parts[3])
 	_, _ = strconv.Atoi(parts[4]) // Wは使わない
 
 	G := make([]int, M)
 	C := make([][]int, N)
-	C_coord := make([][]int, N)
+	C_coord := make([][]float32, N)
 
 	scanner.Scan()
 	line = scanner.Text()
@@ -133,16 +274,64 @@ func main() {
 
 	// 各都市の仮の座標を算出する
 	for i := 0; i < N; i++ {
-		x := (C[i][0] + C[i][1]) / 2
-		y := (C[i][2] + C[i][3]) / 2
-		C_coord[i] = []int{x, y}
+		x := (float32(C[i][0]) + float32(C[i][1])) / 2
+		y := (float32(C[i][2]) + float32(C[i][3])) / 2
+		C_coord[i] = []float32{x, y}
 	}
 
-	// 各都市間のあり得る最大の距離を算出する
-	// TODO: 総当たりの4パターンを計算しているが高速化の余地あり
-	D := make([][]int, N)
+	uncertainties := make([]int, N)
+	uncertainties_id := make([]int, N)
 	for i := 0; i < N; i++ {
-		D[i] = make([]int, N)
+		uncertainties[i] = (C[i][1] - C[i][0]) + (C[i][3] - C[i][2])
+		uncertainties_id[i] = i
+	}
+
+	sort.Slice(uncertainties_id, func(i, j int) bool {
+		return uncertainties[uncertainties_id[i]] < uncertainties[uncertainties_id[j]]
+	})
+
+	anchor_set := make(map[int]struct{})
+	for i := 0; i < N/10; i++ {
+		anchor_set[uncertainties_id[i]] = struct{}{}
+	}
+
+	id_without_anchor := make([]int, 0)
+	for i := 0; i < N; i++ {
+		if _, ok := anchor_set[i]; !ok {
+			id_without_anchor = append(id_without_anchor, i)
+		}
+	}
+
+	queries := make([][]int, Q)
+	for i := 0; i < Q; i++ {
+		query := make([]int, L)
+		anchor := getRandomAnchor(anchor_set)
+		others := randomSample(id_without_anchor, L-1)
+		query[0] = anchor
+		for idx := 0; idx < L-1; idx++ {
+			query[idx+1] = others[idx]
+		}
+		queries[i] = query
+	}
+	query_edges := make([][][]int, Q)
+	for i, q := range queries {
+		edges := query(&q)
+		query_edges[i] = make([][]int, len(edges))
+		for j, e := range edges {
+			query_edges[i][j] = []int{e[0], e[1]}
+		}
+	}
+
+	grads := make([][]float32, N)
+	for i := 0; i < N; i++ {
+		grads[i] = make([]float32, 2)
+	}
+	optimize_coords(&C_coord, &C, &queries, &query_edges, &anchor_set, 0.001, 1.0, 2.0, &grads)
+
+	// 各都市間の距離を算出する
+	D := make([][]float32, N)
+	for i := 0; i < N; i++ {
+		D[i] = make([]float32, N)
 		for j := 0; j < N; j++ {
 			if i == j {
 				D[i][j] = 0
@@ -188,10 +377,6 @@ func main() {
 	}
 	groups := make([][]int, M)
 
-	// 考えられるコストを記録する
-	d_sum := 0
-	d_sum_list := make([]int, M)
-
 	for _, g_id := range G_ids {
 		g := G[g_id]
 		slice := make([]int, g)
@@ -199,7 +384,7 @@ func main() {
 		// 最初の都市は現状選べる最も近い都市との距離が最小である都市を選ぶ
 		first_city_id := -1
 		second_city_id := -1
-		first_d_min := math.MaxInt
+		first_d_min := float32(math.MaxFloat32)
 		ref := -1
 		for i := 0; i < N; i++ {
 			if !C_selected[i] {
@@ -220,23 +405,19 @@ func main() {
 		}
 		if first_city_id == -1 {
 			first_city_id = ref
-			d_sum_list[g_id] = 0
 			slice[0] = first_city_id
 			C_selected[first_city_id] = true
 		} else {
 			slice[0] = first_city_id
-			d_sum_list[g_id] = 0
 			C_selected[first_city_id] = true
 			if g > 1 {
-				d_sum_list[g_id] += first_d_min
 				slice[1] = second_city_id
 				C_selected[second_city_id] = true
-				d_sum += first_d_min
 			}
 		}
 
 		for idx := 2; idx < g; idx++ {
-			d_min := math.MaxInt
+			d_min := float32(math.MaxFloat32)
 			city_id := -1
 			for j := 0; j < idx; j++ {
 				for _, id := range D_ids[slice[j]] {
@@ -248,86 +429,17 @@ func main() {
 					}
 				}
 			}
-			d_sum_list[g_id] += d_min
 			slice[idx] = city_id
-			d_sum += d_min
 			C_selected[city_id] = true
 		}
 		groups[g_id] = slice
 	}
 
-	if M > 1 {
-		cnt := 0
-		for time.Since(start) <= 1500*time.Millisecond {
-			cnt += 1
-			g1 := rand.Intn(M)
-			g2 := rand.Intn(M)
-			for g1 == g2 {
-				g2 = rand.Intn(M)
-			}
-			g1_idx := rand.Intn(G[g1])
-			g2_idx := rand.Intn(G[g2])
-
-			tmp := groups[g1][g1_idx]
-			groups[g1][g1_idx] = groups[g2][g2_idx]
-			groups[g2][g2_idx] = tmp
-
-			rec := d_sum
-			var g1_new, g2_new []int
-			var rec_g1, rec_g2 int
-			if G[g1] > 1 {
-				rec -= d_sum_list[g1]
-				rec_g1 = 0
-				g1_new = sort_group(&groups[g1], &D, &rec_g1)
-				rec += rec_g1
-			}
-
-			if G[g2] > 1 {
-				rec -= d_sum_list[g2]
-				rec_g2 = 0
-				g2_new = sort_group(&groups[g2], &D, &rec_g2)
-				rec += rec_g2
-			}
-
-			if rec < d_sum {
-				d_sum = rec
-				if G[g1] > 1 {
-					groups[g1] = g1_new
-					d_sum_list[g1] = rec_g1
-				}
-
-				if G[g2] > 1 {
-					groups[g2] = g2_new
-					d_sum_list[g2] = rec_g2
-				}
-			} else {
-				tmp := groups[g1][g1_idx]
-				groups[g1][g1_idx] = groups[g2][g2_idx]
-				groups[g2][g2_idx] = tmp
-			}
-		}
-	}
-
-	edges := [][][]int{}
+	edges := make([][][]int, M)
 	for k := 0; k < M; k++ {
+		e := Prim(&groups[k], &D)
+		edges[k] = e
 		edges = append(edges, [][]int{})
-		for i := 0; i < G[k]-1; i += L - 1 {
-			if i+L <= G[k] {
-				subSlice := groups[k][i : i+L]
-				ret := query(&subSlice, writer, scanner)
-				for j := 0; j < len(ret); j++ {
-					edges[k] = append(edges[k], ret[j][:])
-				}
-			} else if G[k]-i >= 2 {
-				subSlice := groups[k][i:G[k]]
-				ret := query(&subSlice, writer, scanner)
-				for j := 0; j < len(ret); j++ {
-					edges[k] = append(edges[k], ret[j][:])
-				}
-			} else {
-				edges[k] = append(edges[k], groups[k][i:i+2])
-			}
-		}
 	}
-	answer(&groups, &edges, writer)
+	answer(&groups, &edges)
 }
